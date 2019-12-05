@@ -1,0 +1,237 @@
+<html>
+
+<head>
+    <style>
+        body {
+            font-family: Helvetica, Arial, sans-serif
+        }
+        
+        svg{
+        	border-style: solid;
+        	border-width: 5px;
+        }
+
+        .mainView {
+        	display: flex;
+        }
+    </style>
+    <script src="d3.js"></script>
+</head>
+
+<body>
+	<h2>Money Donated From One Country to Another</h2>
+    <div class="mainView">
+        <div id="myDiv">
+        </div>
+    </div>
+</body>
+<!-- Add this section to your file -->
+<script> 
+	let store = {};
+	function loadData() {
+		return Promise.all([
+			d3.csv("aiddata.csv"),
+		]).then(datasets => {
+			store.data = datasets[0];
+			return store;
+		})
+	}
+	
+	function groupByDonated(data) {
+		let countries = {};
+		let donatorCountries = {};
+		let recipientCountries = {};
+		for(let i = 0; i < data.length; i++){
+			let country = countries[data[i].donor] || {};
+			let sentTo = country[data[i].recipient] || 0;
+			sentTo += parseInt(data[i].commitment_amount_usd_constant, 10);
+
+			countries[data[i].donor] = country;
+			countries[data[i].donor][data[i].recipient] = sentTo;
+
+			let donatorCountry = donatorCountries[data[i].donor] || {
+				"Country": data[i].donor,
+				"Amount": 0
+			}
+
+			donatorCountry["Amount"] += parseInt(data[i].commitment_amount_usd_constant, 10);
+			donatorCountries[data[i].donor] = donatorCountry;
+
+
+			let recipientCountry = recipientCountries[data[i].recipient] || {
+				"Country": data[i].recipient,
+				"Amount": 0
+			}
+
+			recipientCountry["Amount"] += parseInt(data[i].commitment_amount_usd_constant, 10);
+			recipientCountries[data[i].recipient] = recipientCountry; 
+		}
+
+		donatorCountries = Object.values(donatorCountries).map(x=>x)
+		donatorCountries = donatorCountries.sort(function(first,second) { return d3.ascending(second.Amount, first.Amount); });
+		donatorCountries = Object.values(donatorCountries).map(x=>x["Country"]);
+
+		recipientCountries = Object.values(recipientCountries).map(x=>x)
+		recipientCountries = recipientCountries.sort(function(first,second) { return d3.ascending(second.Amount, first.Amount); });
+		recipientCountries = Object.values(recipientCountries).map(x=>x["Country"])
+
+
+		let keys = Object.keys(countries);
+		let greatest = 0;
+		for(let i = 0; i < keys.length; i++){
+			let recipients = Object.keys(countries[keys[i]]);
+			let recipientsArray = [];
+			for(let j = 0; j < recipients.length; j++){
+				recipientsArray.push({
+					"Recipient": recipients[j],
+					"Amount": countries[keys[i]][recipients[j]]
+				});
+
+				if (greatest < countries[keys[i]][recipients[j]]){
+					greatest = countries[keys[i]][recipients[j]];
+				}
+			}
+			countries[keys[i]] = recipientsArray;
+		}
+
+		console.log(countries);
+		console.log(donatorCountries);
+		console.log(recipientCountries)
+		console.log(greatest);
+
+		return {countries, donatorCountries, recipientCountries, greatest};
+
+
+	}
+	
+	function showData() {
+		let data = store.data
+		let groupedResults = groupByDonated(store.data);
+		let color = ["#051937", "#A8EB12"]
+		drawBigGraph(groupedResults.countries, groupedResults.donatorCountries, groupedResults.recipientCountries, color, groupedResults.greatest);
+	}
+
+
+	function drawBigGraph(data, donatorCountries, recipientCountries, color, greatest) {
+		let container = d3.select("#myDiv");
+		
+		var margin = {
+			top: 120,
+			right: 150,
+			bottom: 150,
+			left: 130
+		}
+
+		let gridSizeWidth = 20,
+			gridSizeHeight = 15,
+			countriesX = recipientCountries,
+			countriesY = donatorCountries,
+			width = gridSizeWidth * countriesX.length + margin.left + margin.right;
+			height = gridSizeHeight * countriesY.length + margin.top + margin.bottom;
+			
+		var svg = container
+			.append("svg")
+			.attr("width", width)
+			.attr("height", height)
+			.append("g")
+			.attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+			
+		var y = d3.scaleBand()
+			.range([0,height-margin.bottom])
+			.domain(countriesY);
+			
+		var x = d3.scaleBand()
+			.range([0,width-margin.right])
+			.domain(countriesX);
+			
+		let colorScale = d3.scalePow()
+			.exponent(.25)
+            .domain([0, greatest])
+            .range(color);
+			
+		svg.append("g")
+			.call(d3.axisLeft(y));
+			
+		svg.append("g")
+			.call(d3.axisRight(x))
+			.attr("transform", "rotate(-90 0 0)");
+			
+			
+		for(let i = 0; i < countriesY.length; i++){
+			svg.selectAll(".rect")
+				.data(data[countriesY[i]])
+				.enter()
+				.append("rect")
+				.attr("x", function(d) { return x(d.Recipient)})
+				.attr("y", function(d) { return y(countriesY[i])})
+				.attr("height", gridSizeHeight)
+				.attr("width", gridSizeWidth)
+				.attr("fill", function(d) { return colorScale(d.Amount)});
+		}
+
+		svg.append("text")             
+			.attr("transform", "translate(-100,"+ (height/2 - margin.top) +") rotate(-90 0 0)")
+			.style("text-anchor", "middle")
+			.text("Money Donator");
+
+		svg.append("text")
+			.attr("transform", "translate("+ (width/2 - margin.left) +", -100)")
+			.style("text-anchor", "middle")
+			.text("Money Recipient");
+		
+		var legend = svg.append("defs")
+		  .append("svg:linearGradient")
+		  .attr("id", "gradient")
+		  .attr("x1", "0%")
+		  .attr("y1", "100%")
+		  .attr("x2", "100%")
+		  .attr("y2", "100%")
+		  .attr("spreadMethod", "pad");
+	
+		legend.append("stop")
+		  .attr("offset", "0%")
+		  .attr("stop-color", colorScale(0))
+		  .attr("stop-opacity", 1);
+	
+		legend.append("stop")
+		  .attr("offset", "33%")
+		  .attr("stop-color", colorScale(.33*greatest))
+		  .attr("stop-opacity", 1);
+	
+		legend.append("stop")
+		  .attr("offset", "66%")
+		  .attr("stop-color", colorScale(.66*greatest))
+		  .attr("stop-opacity", 1);
+	
+		legend.append("stop")
+		  .attr("offset", "100%")
+		  .attr("stop-color", colorScale(greatest))
+		  .attr("stop-opacity", 1);
+		  
+		svg.append("rect")
+		  .attr("width", 400)
+		  .attr("height", 20)
+		  .style("fill", "url(#gradient)")
+		  .attr("transform", "translate(50,"+ (height-margin.bottom+10) + ")");
+		  
+		svg.append("text")
+        	.attr("x", 30)
+            .attr("y", height-margin.bottom+25)
+            .attr("height",50)
+            .attr("width",50)
+            .text("0");
+            
+        svg.append("text")
+        	.attr("x", 460)
+            .attr("y", height-margin.bottom+25)
+            .attr("height",50)
+            .attr("width",50)
+            .text(greatest);
+	}
+	
+	loadData().then(showData);
+	
+	
+</script>
+
+</html>
