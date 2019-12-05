@@ -97,7 +97,7 @@
         let {width, height} = config;
         let projection = d3.geoMercator()
         projection.scale(97)
-                .translate([width / 2, height / 2 + 20])
+                  .translate([width / 2, height / 2 + 20])
                 
         store.mapProjection = projection;
         return projection;
@@ -105,10 +105,10 @@
 
     function drawBaseMap(container, allCountries, projection, dataArray){
         let path = d3.geoPath()
-            .projection(projection)
+                     .projection(projection)
 
         //create hashtable of countries
-        var data = d3.map()
+        let data = d3.map()
 
         //edit the names of the data to match geojson
         for(let i = 0; i < dataArray.length; i++){
@@ -128,78 +128,79 @@
         
         //scale color linearly between the 3 specified values
         let color = d3.scaleLinear()
-            .domain([0,50,100])
-            .range(["#fc8d59", "#ffffbf", "#91cf60"]);
+                      .domain([0,50,100])
+                      .range(["#fc8d59", "#ffffbf", "#91cf60"]);
 
         container.append("g")
-            .selectAll("path")
-            .data(allCountries)
-            .enter()
-            .append("path")
-              // draw each country
-              .attr("d", d=> path(d))
-              // set the color of each country
-              .attr("fill", function (d) {
-                d.total = data.get(d.properties.name) || -1;
-                if (d.total == -1){
-                    return "gray";
-                }
-                return color(d.total);
-              });
+                 .selectAll("path")
+                 .data(allCountries)
+                 .enter()
+                 .append("path")
+                  // draw each country
+                 .attr("d", d=> path(d))
+                  // set the color of each country
+                 .attr("fill", function (d) {
+                     d.total = data.get(d.properties.name) || -1;
+                     if (d.total == -1){
+                         return "gray";
+                     }
+                     return color(d.total);
+                 });
 
     }
     
     function makeLegend(container){
     	let legend = container.append("g")
-            .attr("class", "legend")
-            .attr("transform", "translate(5, 5)");
+                              .attr("class", "legend")
+                              .attr("transform", "translate(5, 5)");
 
         legend.append("rect")
-            .attr("width", "30")
-            .attr("height", "50")
-            .attr("fill", "pink");
+              .attr("width", "30")
+              .attr("height", "50")
+              .attr("fill", "pink");
 
         legend.selectAll("g").data(["0", "50", "100"])
-            .enter()
-            .append("g")
-            .each(function(d,i) {
-                let g = d3.select(this);
-                g.append("rect")
-                    .attr("x", 10)
-                    .attr("y", i*20)
-                    .attr("width", 10)
-                    .attr("height", 10)
-                    .style("fill", function(d){
-                        if (d === "0"){
-                            return "#fc8d59";
-                        }
-                        else if(d === "50"){
-                            return "#ffffbf";
-                        }
-                        else{
-                            return "#91cf60";
-                        }
-                    })
+                             .enter()
+                             .append("g")
+                             .each(function(d,i) {
 
-                g.append("text")
-                    .attr("x", 30)
-                    .attr("y", i * 20 + 10)
-                    .attr("height",50)
-                    .attr("width",50)
-                    .style("fill", "black")
-                    .text(function(d){
-                    	if(d==="0"){
-                    		return "100% Received, 0% Donated"
-                    	}
-                    	else if(d === "50"){
-                    		return "50% Received, 50% Donated"
-                    	}
-                    	else{
-                    		return "0% Received, 100% Donated"
-                    	}
-                    });
+                                let g = d3.select(this);
+                                g.append("rect")
+                                 .attr("x", 10)
+                                 .attr("y", i*20)
+                                 .attr("width", 10)
+                                 .attr("height", 10)
+                                 .style("fill", function(d){
+                                    if (d === "0"){
+                                        return "#fc8d59";
+                                    }
+                                    else if(d === "50"){
+                                        return "#ffffbf";
+                                    }
+                                    else{
+                                        return "#91cf60";
+                                    }
+                                 })
 
-            });
+                                g.append("text")
+                                 .attr("x", 30)
+                                 .attr("y", i * 20 + 10)
+                                 .attr("height",50)
+                                 .attr("width",50)
+                                 .style("fill", "black")
+                                 .text(function(d){
+                                	if(d==="0"){
+                                		return "100% Received, 0% Donated"
+                                	}
+                                	else if(d === "50"){
+                                		return "50% Received, 50% Donated"
+                                	}
+                                	else{
+                                		return "0% Received, 100% Donated"
+                                	}
+                                 });
+
+                            });
     }
     
 
