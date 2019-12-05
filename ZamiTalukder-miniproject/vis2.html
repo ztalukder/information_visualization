@@ -1,0 +1,218 @@
+<html>
+
+<head>
+    <style>
+        body {
+            font-family: Helvetica, Arial, sans-serif
+        }
+        
+        svg{
+        	border-style: solid;
+        	border-width: 5px;
+        }
+
+        .mainView {
+        	display: flex;
+        }
+
+        .legend {
+            background-color: black;
+        }
+    </style>
+    <script src="d3.js"></script>
+</head>
+
+<body>
+	<h2>Money Received vs Donated by Country</h2>
+    <div class="mainView">
+        <div id="myDiv">
+        	<svg id="Map"></svg>
+        </div>
+    </div>
+</body>
+<!-- Add this section to your file -->
+<script> 
+	let store = {};
+	function loadData() {
+		return Promise.all([
+			d3.csv("aiddata.csv"),
+			d3.json("countries.geo.json")
+		]).then(datasets => {
+			store.data = datasets[0];
+			store.geoJSON = datasets[1];
+			return store;
+		})
+	}
+	
+	function groupByReceived(data) {
+		//Iterate over each row, producing a dictionary where the keys are countries
+		let result = data.reduce((result, d) => {
+			let donator = result[d.donor] || {
+				"Country": d.donor,
+				"Received": 0,
+				"Donated": 0
+			}
+			donator.Donated += parseInt(d.commitment_amount_usd_constant, 10);
+			result[d.donor] = donator;
+			
+			let recipient = result[d.recipient] || {
+				"Country": d.recipient,
+				"Received": 0,
+				"Donated": 0
+			}
+			recipient.Received += parseInt(d.commitment_amount_usd_constant, 10);
+			result[d.recipient] = recipient;
+	
+			return result;
+		}, {})
+		
+		result = Object.keys(result).map(key => result[key])
+
+        for(let i = 0; i < result.length; i++){
+            result[i].Ratio = (result[i].Donated/(result[i].Donated+result[i].Received))*100
+        }
+	
+		return result
+	}
+	
+	function showData() {
+		//Get the routes from our store variable
+		let data = store.data
+		// Compute the number of routes per airline.
+		let countries = groupByReceived(store.data);
+		console.log(countries);
+        drawMap(store.geoJSON, countries);
+	}
+	
+	function getMapConfig(){
+		let width = 900;
+		let height = 600;
+		let container = d3.select("#Map")
+							.attr("width", width)
+                            .attr("height", height)
+        return {width, height, container}	
+	}
+
+    function getMapProjection(config) {
+        let {width, height} = config;
+        let projection = d3.geoMercator()
+        projection.scale(97)
+                .translate([width / 2, height / 2 + 20])
+                
+        store.mapProjection = projection;
+        return projection;
+    }
+
+    function drawBaseMap(container, allCountries, projection, dataArray){
+        let path = d3.geoPath()
+            .projection(projection)
+
+        //create hashtable of countries
+        var data = d3.map()
+
+        //edit the names of the data to match geojson
+        for(let i = 0; i < dataArray.length; i++){
+            if(dataArray[i].Country === "United States"){
+                data.set("United States of America", dataArray[i].Ratio);
+            }
+            else if(dataArray[i].Country === "Korea"){
+                data.set("South Korea", dataArray[i].Ratio);
+            }
+            else if(dataArray[i].Country === "Slovak Republic"){
+                data.set("Slovakia", dataArray[i].Ratio);
+            }
+            else{
+                data.set(dataArray[i].Country, dataArray[i].Ratio);
+            }
+        }
+        
+        //scale color linearly between the 3 specified values
+        let color = d3.scaleLinear()
+            .domain([0,50,100])
+            .range(["#fc8d59", "#ffffbf", "#91cf60"]);
+
+        container.append("g")
+            .selectAll("path")
+            .data(allCountries)
+            .enter()
+            .append("path")
+              // draw each country
+              .attr("d", d=> path(d))
+              // set the color of each country
+              .attr("fill", function (d) {
+                d.total = data.get(d.properties.name) || -1;
+                if (d.total == -1){
+                    return "gray";
+                }
+                return color(d.total);
+              });
+
+    }
+    
+    function makeLegend(container){
+    	let legend = container.append("g")
+            .attr("class", "legend")
+            .attr("transform", "translate(5, 5)");
+
+        legend.append("rect")
+            .attr("width", "30")
+            .attr("height", "50")
+            .attr("fill", "pink");
+
+        legend.selectAll("g").data(["0", "50", "100"])
+            .enter()
+            .append("g")
+            .each(function(d,i) {
+                let g = d3.select(this);
+                g.append("rect")
+                    .attr("x", 10)
+                    .attr("y", i*20)
+                    .attr("width", 10)
+                    .attr("height", 10)
+                    .style("fill", function(d){
+                        if (d === "0"){
+                            return "#fc8d59";
+                        }
+                        else if(d === "50"){
+                            return "#ffffbf";
+                        }
+                        else{
+                            return "#91cf60";
+                        }
+                    })
+
+                g.append("text")
+                    .attr("x", 30)
+                    .attr("y", i * 20 + 10)
+                    .attr("height",50)
+                    .attr("width",50)
+                    .style("fill", "black")
+                    .text(function(d){
+                    	if(d==="0"){
+                    		return "100% Received, 0% Donated"
+                    	}
+                    	else if(d === "50"){
+                    		return "50% Received, 50% Donated"
+                    	}
+                    	else{
+                    		return "0% Received, 100% Donated"
+                    	}
+                    });
+
+            });
+    }
+    
+
+    function drawMap(geoJSON, dataArray){
+        let config = getMapConfig();
+        let projection = getMapProjection(config);
+        drawBaseMap(config.container, geoJSON.features, projection, dataArray);
+        makeLegend(config.container);
+    }
+	
+	loadData().then(showData);
+	
+	
+</script>
+
+</html>

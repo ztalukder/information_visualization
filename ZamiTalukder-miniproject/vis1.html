@@ -1,0 +1,202 @@
+<html>
+
+<head>
+    <style>
+        body {
+            font-family: Helvetica, Arial, sans-serif
+        }
+        
+        svg{
+        	border-style: solid;
+        	border-width: 5px;
+        }
+
+        .mainView {
+        	display: flex;
+        }
+    </style>
+    <script src="d3.js"></script>
+</head>
+
+<body>
+	<h2>Percentage of Money Received vs Donated by Country</h2>
+    <div class="mainView">
+        <div id="myDiv">
+        </div>
+    </div>
+</body>
+<!-- Add this section to your file -->
+<script> 
+	let store = {};
+	function loadData() {
+		return Promise.all([
+			d3.csv("aiddata.csv"),
+		]).then(datasets => {
+			store.data = datasets[0];
+			return store;
+		})
+	}
+	
+	function groupByReceived(data) {
+		//Iterate over each row, producing a dictionary where the keys are countries
+		let result = data.reduce((result, d) => {
+			let donator = result[d.donor] || {
+				"Country": d.donor,
+				"Received": 0,
+				"Donated": 0
+			}
+			donator.Donated += parseInt(d.commitment_amount_usd_constant, 10);
+			result[d.donor] = donator;
+			
+			let recipient = result[d.recipient] || {
+				"Country": d.recipient,
+				"Received": 0,
+				"Donated": 0
+			}
+			recipient.Received += parseInt(d.commitment_amount_usd_constant, 10);
+			result[d.recipient] = recipient;
+	
+			return result;
+		}, {})
+		
+		//We use this to convert the dictionary produced by the code above, into a list, that will make it easier to create the visualization. 
+		result = Object.keys(result).map(key => result[key])
+		result = result.sort(function(first,second) { return d3.ascending((second.Donated/(second.Donated+second.Received))*100, (first.Donated/(first.Donated+first.Received))*100); });
+	
+		return result
+	}
+	
+	function showData() {
+		//Get the data from our store variable
+		let data = store.data
+		
+		let countries = groupByReceived(store.data);
+		console.log(countries);
+		let svg = drawChart(countries);
+		makeLegend(svg);
+	}
+	
+	function drawChart(countries){
+		//Make the config
+		let container = d3.select("#myDiv")
+		let width = 1500;
+		let height = 600;
+		let margin = {
+			top: 50,
+			bottom: 100,
+			left: 130,
+			right: 200
+		}
+		let barPadding = .2;
+		let axisTicks = {qty: 10, outerSize: 0};
+		
+		var svg = container
+			.append("svg")
+			.attr("width", width)
+			.attr("height", height)
+			.append("g")
+			.attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+		//make the axes and scales
+		var xScale0 = d3.scaleBand().range([0, width-margin.left - margin.right]).padding(barPadding);
+		
+		var xScale1 = d3.scaleBand();
+		
+		var yScale = d3.scaleLinear().range([height-margin.top-margin.bottom,0]);
+		
+		var xAxis = d3.axisBottom(xScale0).tickSizeOuter(axisTicks.outerSize);
+		var yAxis = d3.axisLeft(yScale).ticks(axisTicks.qty).tickSizeOuter(axisTicks.outerSize);
+
+		
+		//define the domain of each axis
+		xScale0.domain(countries.map(d => d.Country))
+		xScale1.domain(['Received','Donated']).range([0, xScale0.bandwidth()])
+		
+		yScale.domain([0, 100])
+		
+		
+		//Add in each axis into the svg
+		var model = svg.selectAll(".Country")
+			.data(countries)
+			.enter().append("g")
+			.attr("class", "Country")
+			.attr("transform", d=> `translate(${xScale0(d.Country)},0)`);
+			
+		model.selectAll(".bar.Received")
+			.data(d=>[d])
+			.enter()
+			.append("rect")
+			.attr("class", "bar Received")
+		.style("fill", "#fc8d59")
+			.attr("x", d=> xScale1("Received"))
+			.attr("y", d=> yScale((d.Received/(d.Received+d.Donated))*100))
+			.attr("width", xScale1.bandwidth())
+			.attr("height", d=> {return height-margin.top - margin.bottom - yScale((d.Received/(d.Received+d.Donated))*100)});
+		
+		model.selectAll(".bar.Donated")
+			.data(d=>[d])
+			.enter()
+			.append("rect")
+			.attr("class", "bar Donated")
+		.style("fill", "#91cf60")
+			.attr("x", d=>xScale1("Donated"))
+			.attr("y", d=>yScale((d.Donated/(d.Received+d.Donated))*100))
+			.attr("width", xScale1.bandwidth())
+			.attr("height", d=>{return height - margin.top - margin.bottom - yScale((d.Donated/(d.Received+d.Donated))*100)});
+			
+		//show each axis
+		svg.append("g")
+			.attr("class", "x axis")
+			.attr("transform", `translate(0, ${height-margin.top-margin.bottom})`)
+			.call(xAxis)
+				.selectAll("text")
+				.attr("transform", "rotate(45 -10 10)");
+		
+		svg.append("g")
+			.attr("class", "y axis")
+			.call(yAxis);
+			
+		return svg;
+			
+	}
+	
+	function makeLegend(svg){
+		let legend = svg.append("g")
+			.attr("class", "legend")
+            .attr("transform", "translate(1200, 0)");
+
+
+		legend.selectAll("g").data(["Received", "Donated"])
+			.enter()
+			.append("g")
+			.each(function(d,i) {
+				let g = d3.select(this);
+				g.append("rect")
+					.attr("x", 10)
+					.attr("y", i*20)
+					.attr("width", 10)
+					.attr("height", 10)
+					.style("fill", function(d){
+                        if (d === "Received"){
+                            return "#fc8d59"
+                        }
+                        return "#91cf60"
+                    })
+
+				g.append("text")
+		        	.attr("x", 30)
+		            .attr("y", i * 20 + 10)
+		            .attr("height",50)
+		            .attr("width",50)
+		            .style("fill", "black")
+		            .text(d);
+
+			});
+	}
+	
+	loadData().then(showData);
+	
+	
+</script>
+
+</html>
